@@ -11,6 +11,7 @@
       background:#F0CFBB;
       font-family:'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif;
       min-height:100vh;
+      overflow-x:hidden;
     }
 
     /* ═══ Password overlay ═══ */
@@ -62,7 +63,7 @@
     @keyframes spin { to { transform:rotate(360deg); } }
 
     /* ═══ App ═══ */
-    #app { width:940px; margin:0 auto; background:#F0CFBB; padding:12px; }
+    #app { max-width:940px; width:100%; margin:0 auto; background:#F0CFBB; padding:12px; }
 
     /* top bar */
     #top-bar { display:flex; align-items:flex-start; gap:12px; min-height:110px; margin-bottom:6px; }
@@ -112,6 +113,7 @@
 
     /* ═══ 4 mini keyboards ═══ */
     #g2-keyboards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .mini-piano-outer { overflow:hidden; }
     .kb-wrap {
       border:3px solid transparent; border-radius:6px;
       padding:5px 6px; cursor:pointer; user-select:none;
@@ -164,6 +166,25 @@
     .msg-btn:hover { background:#f5e8dc; }
     .msg-btn.primary { background:#A07050; color:white; border-color:#7a5030; }
     .msg-btn.primary:hover { background:#8a6040; }
+
+    /* ═══ RWD ═══ */
+    @media (max-width: 520px) {
+      #g2-keyboards { grid-template-columns:1fr; }
+    }
+    @media (max-width: 640px) {
+      #top-bar { flex-wrap:wrap; min-height:auto; gap:8px; }
+      .timer-panel { order:1; flex:0 0 auto; min-width:auto; }
+      #g2-timer { font-size:38px; }
+      .ctrl-panel { order:2; flex:1; align-items:flex-start; padding-top:4px; }
+      .diff-panel {
+        order:3; width:100%; flex-direction:row;
+        padding-top:0; gap:6px; align-items:flex-start;
+      }
+      .diff-row { flex:1; flex-direction:column; height:auto; gap:2px; align-items:stretch; }
+      .diff-btn { width:100%; }
+      .diff-stats { font-size:10px; white-space:normal; line-height:1.3; }
+      .notice-text { font-size:11px; }
+    }
   </style>
 </head>
 <body>
@@ -295,7 +316,10 @@ function g2BuildKeyboards() {
       k.className='mbk'; k.id=g2kId(lt,note);
       k.style.left=G2_BK_LEFT[note]+'px'; piano.appendChild(k);
     });
-    wrap.appendChild(lbl); wrap.appendChild(piano); grid.appendChild(wrap);
+    const pianoOuter = document.createElement('div');
+    pianoOuter.className = 'mini-piano-outer';
+    pianoOuter.appendChild(piano);
+    wrap.appendChild(lbl); wrap.appendChild(pianoOuter); grid.appendChild(wrap);
   }
 }
 
@@ -412,10 +436,30 @@ function g2Replay(){
   g2DemoPhase();
 }
 
+// ── RWD：依螢幕寬度縮放各小鋼琴 ──
+function rescaleG2Pianos() {
+  document.querySelectorAll('.mini-piano-outer').forEach(outer => {
+    const piano = outer.querySelector('.mini-piano');
+    const avail = outer.clientWidth, W = 422, H = 126;
+    if (avail > 0 && avail < W) {
+      const s = avail / W;
+      piano.style.transform      = `scale(${s.toFixed(4)})`;
+      piano.style.transformOrigin = 'top center';
+      outer.style.height = Math.ceil(H * s) + 'px';
+    } else {
+      piano.style.transform      = '';
+      piano.style.transformOrigin = '';
+      outer.style.height = '';
+    }
+  });
+}
+window.addEventListener('resize', rescaleG2Pianos);
+
 // ── Init ──
 initMode(2);
 initDur(2);
 g2BuildKeyboards();
+requestAnimationFrame(rescaleG2Pianos);
 initPasswordGuard(()=>{
   document.addEventListener('click',()=>{ if(!audioCtx) initAudio(()=>g2UpdateStats()); else resumeCtx(); });
   initAudio(()=>{
