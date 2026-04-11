@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EarGame 聽音辨識</title>
+  <style>
+    /* ═══ Base ═══ */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:#F0CFBB;
+      font-family:'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif;
+      min-height:100vh;
+    }
+
+    /* ═══ Password overlay ═══ */
+    #pw-overlay {
+      position:fixed; inset:0;
+      background:rgba(240,207,187,0.97);
+      display:flex; align-items:center; justify-content:center; z-index:1000;
+    }
+    #pw-overlay.hidden { display:none; }
+    .pw-box {
+      background:white; border:2px solid #967550; border-radius:14px;
+      padding:40px 44px; max-width:420px; width:92%;
+      text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.18);
+    }
+    .pw-icon  { font-size:48px; margin-bottom:12px; }
+    .pw-title { font-size:20px; font-weight:bold; color:#5a3a1a; margin-bottom:6px; }
+    .pw-sub   { font-size:14px; color:#777; margin-bottom:20px; line-height:1.6; }
+    #pw-input {
+      width:100%; padding:10px 14px; font-size:17px; letter-spacing:2px;
+      font-family:'Courier New',monospace; border:2px solid #C8A47A;
+      border-radius:7px; text-align:center; text-transform:uppercase;
+      outline:none; margin-bottom:8px;
+    }
+    #pw-input:focus { border-color:#A07050; }
+    #pw-err { color:#C0392B; font-size:13px; margin-bottom:10px; min-height:18px; }
+    #pw-err.hidden { visibility:hidden; }
+    #pw-submit {
+      width:100%; padding:11px; background:#A07050; color:white;
+      border:none; border-radius:7px; font-size:15px; font-family:inherit;
+      cursor:pointer; margin-bottom:14px;
+    }
+    #pw-submit:hover { background:#8a6040; }
+    .pw-contact { font-size:13px; color:#888; }
+    .pw-contact a { color:#7B4FCF; text-decoration:none; }
+    .pw-contact a:hover { text-decoration:underline; }
+
+    /* ═══ Loading ═══ */
+    #loading-overlay {
+      position:fixed; inset:0; background:rgba(240,207,187,.93);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:14px; font-size:17px; color:#555; z-index:500;
+    }
+    #loading-overlay.hidden { display:none; }
+    .spinner {
+      width:36px; height:36px;
+      border:4px solid #cba890; border-top-color:#A07050;
+      border-radius:50%; animation:spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ═══ App ═══ */
+    #app { width:940px; margin:0 auto; background:#F0CFBB; padding:12px; }
+
+    /* top bar */
+    #top-bar { display:flex; align-items:flex-start; gap:12px; min-height:110px; margin-bottom:6px; }
+    .timer-panel { min-width:155px; padding-top:8px; }
+    #g1-timer {
+      font-size:52px; font-weight:bold; color:#CC0000;
+      font-family:'Courier New',monospace; letter-spacing:2px;
+    }
+    .diff-panel { flex:1; display:flex; flex-direction:column; gap:4px; padding-top:8px; }
+    .diff-row   { display:flex; align-items:center; gap:10px; height:28px; }
+    .diff-btn {
+      width:80px; height:28px; font-size:14px; font-weight:bold;
+      font-family:inherit; border:1.5px solid #967550; border-radius:4px;
+      background:white; color:#333; cursor:pointer; flex-shrink:0;
+      transition:background .1s, color .1s;
+    }
+    .diff-btn:hover:not(:disabled) { background:#f5e8dc; }
+    .diff-btn.selected { background:#A07050; color:white; }
+    .diff-btn:disabled { opacity:.45; cursor:not-allowed; }
+    .diff-stats { font-size:12px; color:#666; white-space:nowrap; }
+
+    /* right column: controls + notice */
+    .ctrl-panel { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .dur-row    { display:flex; align-items:center; gap:6px; font-size:13px; color:#444; }
+    .pm-btn {
+      width:28px; height:28px; font-size:16px; line-height:1;
+      border:1.5px solid #967550; border-radius:4px;
+      background:white; cursor:pointer; font-family:inherit;
+    }
+    .pm-btn:hover:not(:disabled) { background:#f5e8dc; }
+    .pm-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .dur-val  { min-width:50px; text-align:center; font-weight:bold; }
+    .mode-btn {
+      padding:5px 14px; font-size:13px; font-family:inherit;
+      border:1.5px solid #967550; border-radius:4px;
+      background:white; cursor:pointer; color:#333;
+    }
+    .mode-btn:hover { background:#f5e8dc; }
+
+    /* 警語（右對齊，小字，放在控制區下方，與原版相同位置） */
+    .notice-text {
+      text-align:right;
+      font-size:12px;
+      color:#888;
+      line-height:1.8;
+      margin-top:4px;
+    }
+    .notice-text a { color:#7B4FCF; text-decoration:none; font-style:italic; }
+    .notice-text a:hover { text-decoration:underline; }
+
+    /* hint bar */
+    .hint-bar {
+      text-align:center; font-size:15px; color:#5a3a1a;
+      font-weight:bold; padding:4px 0; min-height:28px;
+    }
+
+    /* ═══ Big piano ═══ */
+    #g1-piano-wrap { display:flex; justify-content:center; margin:6px 0; }
+    #g1-piano {
+      position:relative; width:630px; height:168px;
+      background:#2a2a2a; border:1px solid #555;
+      border-radius:0 0 6px 6px;
+    }
+    .wk {
+      position:absolute; top:1px; width:88px; height:164px;
+      background:white; border:1px solid #888; border-radius:0 0 6px 6px; z-index:1;
+      display:flex; align-items:flex-end; justify-content:center;
+      padding-bottom:8px; cursor:pointer; transition:background .08s; user-select:none;
+    }
+    .wk:hover { background:#f8f0e8; }
+    .bk {
+      position:absolute; top:1px; width:54px; height:100px;
+      background:#222; border-radius:0 0 5px 5px; z-index:2;
+      cursor:pointer; transition:background .08s; user-select:none;
+    }
+    .bk:hover { background:#444; }
+    .wk.gray-key   { background:#C4C4C4; }
+    .wk.orange-key { background:#FFA030; }
+    .wk.green-key  { background:#5CB85C; }
+    .wk.red-key    { background:#D9534F; }
+    .bk.gray-key   { background:#787878; }
+    .bk.orange-key { background:#CC7000; }
+    .bk.green-key  { background:#2d8a2d; }
+    .bk.red-key    { background:#aa2020; }
+    .wk-label { font-size:13px; color:#555; font-weight:500; pointer-events:none; user-select:none; }
+
+    /* ═══ Message dialog ═══ */
+    #msg-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:flex; align-items:center; justify-content:center; z-index:300;
+    }
+    #msg-overlay.hidden { display:none; }
+    #msg-box {
+      background:#F5D8C4; border:2px solid #967550; border-radius:10px;
+      padding:28px 36px; min-width:300px; text-align:center;
+      box-shadow:0 8px 32px rgba(0,0,0,.25);
+    }
+    #msg-title { font-size:22px; font-weight:bold; margin-bottom:10px; color:#333; }
+    #msg-text  { font-size:15px; margin-bottom:22px; color:#555; }
+    .msg-btn {
+      padding:8px 22px; margin:4px; font-size:14px; font-family:inherit;
+      border:1.5px solid #967550; border-radius:5px;
+      background:white; cursor:pointer; color:#333;
+    }
+    .msg-btn:hover { background:#f5e8dc; }
+    .msg-btn.primary { background:#A07050; color:white; border-color:#7a5030; }
+    .msg-btn.primary:hover { background:#8a6040; }
+  </style>
+</head>
+<body>
+
+<!-- ── 密碼防護畫面 ────────────────────────────────── -->
+<div id="pw-overlay">
+  <div class="pw-box">
+    <div class="pw-icon">🔑</div>
+    <div class="pw-title">需要老師的密碼</div>
+    <div class="pw-sub">
+      超過 <strong>48 小時</strong> 未練習<br>
+      請每天練習，跟老師索取今日密碼 🎵
+    </div>
+    <input id="pw-input" type="text" placeholder="LARK-XXXX-XXXX"
+           autocomplete="off" spellcheck="false" maxlength="14">
+    <div id="pw-err" class="hidden">❌ 密碼錯誤，請確認後再試</div>
+    <button id="pw-submit">確認密碼</button>
+    <div class="pw-contact">
+      聯繫老師：
+      <a href="https://www.instagram.com/larksfaith" target="_blank" rel="noopener">@larksfaith</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── 載入音色 ───────────────────────────────────── -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div>載入鋼琴音色中，請稍候…</div>
+</div>
+
+<!-- ── 遊戲主體 ───────────────────────────────────── -->
+<div id="app">
+  <div id="top-bar">
+    <!-- 計時器 -->
+    <div class="timer-panel">
+      <div id="g1-timer">00.00</div>
+    </div>
+
+    <!-- 難度選擇 -->
+    <div class="diff-panel">
+      <div class="diff-row">
+        <button class="diff-btn" id="g1-btn-0" onclick="g1SetDiff(0)">初階</button>
+        <span class="diff-stats" id="g1-stats-0"></span>
+      </div>
+      <div class="diff-row">
+        <button class="diff-btn" id="g1-btn-1" onclick="g1SetDiff(1)">進階</button>
+        <span class="diff-stats" id="g1-stats-1"></span>
+      </div>
+      <div class="diff-row">
+        <button class="diff-btn" id="g1-btn-2" onclick="g1SetDiff(2)">困難</button>
+        <span class="diff-stats" id="g1-stats-2"></span>
+      </div>
+    </div>
+
+    <!-- 右側：播放控制 + 警語 -->
+    <div class="ctrl-panel">
+      <div class="dur-row">
+        <span>播放秒數</span>
+        <button class="pm-btn" id="g1-dur-m" onclick="adjDur(1,-1,()=>g1.inProgress)">－</button>
+        <span class="dur-val" id="g1-dur-val">0.5秒</span>
+        <button class="pm-btn" id="g1-dur-p" onclick="adjDur(1,1,()=>g1.inProgress)">＋</button>
+      </div>
+      <button class="mode-btn" id="g1-mode-btn" onclick="cycleMode(1,g1UpdateLabels)">DoReMi</button>
+      <!-- 警語：與原版相同位置，右對齊小字 -->
+      <div class="notice-text">
+        此程式為 Lark 超好玩歌唱班 專屬所有<br>
+        請勿轉傳或分享給他人，我們要當個誠實的人<br>
+        設計者：Lark李念 <a href="https://www.instagram.com/larksfaith" target="_blank" rel="noopener">@larksfaith</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint-bar" id="g1-hint">請選擇難度，開始遊戲！</div>
+
+  <div id="g1-piano-wrap">
+    <div id="g1-piano"></div>
+  </div>
+</div>
+
+<!-- ── 彈出訊息框 ─────────────────────────────────── -->
+<div id="msg-overlay" class="hidden">
+  <div id="msg-box">
+    <div id="msg-title"></div>
+    <div id="msg-text"></div>
+    <div id="msg-btns"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.js"></script>
+<script src="shared.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  Game 1  –  大鋼琴聽音辨識
+// ═══════════════════════════════════════════════════════════════
+const G1_WK_LEFT = [0,90,180,270,360,450,540];
+const G1_BK_LEFT = {'C#3':63,'D#3':153,'F#3':333,'G#3':423,'A#3':513};
+
+const g1 = {
+  diff:-1, inProgress:false, guessPhase:false, showResult:false,
+  sequence:[], selectedKeys:new Set(),
+  targetNote:null, guessedNote:null, guessCorrect:false,
+  timer: mkTimer('g1-timer'),
+  sched: mkSched([]),
+  stats: loadSt('eargame1_stats')
+};
+
+function g1BuildPiano() {
+  const piano = document.getElementById('g1-piano');
+  piano.innerHTML = '';
+  NOTES.forEach((note,i) => {
+    const k = document.createElement('div');
+    k.className = 'wk'; k.id = 'g1k-'+note.replace('#','s');
+    k.style.left = G1_WK_LEFT[i]+'px'; k.dataset.note = note;
+    const lbl = document.createElement('span');
+    lbl.className = 'wk-label';
+    lbl.textContent = NOTE_LBLS[dispMode[1]][i];
+    k.appendChild(lbl);
+    k.addEventListener('click', () => g1KeyClick(note));
+    piano.appendChild(k);
+  });
+  BK_NOTES.forEach(note => {
+    const k = document.createElement('div');
+    k.className = 'bk'; k.id = 'g1k-'+note.replace('#','s');
+    k.style.left = G1_BK_LEFT[note]+'px';
+    k.addEventListener('click', () => g1BkClick(note));
+    piano.appendChild(k);
+  });
+}
+
+function g1UpdateLabels() {
+  NOTES.forEach((note,i) => {
+    const el = document.getElementById('g1k-'+note.replace('#','s'));
+    if (el) el.querySelector('.wk-label').textContent = NOTE_LBLS[dispMode[1]][i];
+  });
+}
+
+function g1SetKey(note,state) {
+  const el = document.getElementById('g1k-'+note.replace('#','s'));
+  if (!el) return;
+  el.classList.remove('gray-key','orange-key','green-key','red-key');
+  if (state) el.classList.add(state+'-key');
+}
+function g1ClearAllKeys() {
+  NOTES.forEach(n=>g1SetKey(n,null));
+  BK_NOTES.forEach(n=>g1SetKey(n,null));
+}
+function g1GraySeqKeys() { g1.sequence.forEach(n=>g1SetKey(n,'gray')); }
+
+function g1UpdateStats() {
+  for (let i=0;i<3;i++) {
+    const s=g1.stats[i];
+    document.getElementById('g1-stats-'+i).textContent = s.count>0
+      ? `目前挑戰成功${s.count}次  最速紀錄${s.best.toFixed(2)}秒` : '';
+  }
+}
+function g1RefreshDiffBtns() {
+  for (let i=0;i<3;i++)
+    document.getElementById('g1-btn-'+i).classList.toggle('selected',i===g1.diff);
+}
+function g1Hint(txt) { document.getElementById('g1-hint').textContent = txt; }
+
+function g1SetDiff(d) {
+  if (!audioReady) return;
+  if (g1.inProgress) g1Stop();
+  g1.diff=d; g1RefreshDiffBtns(); g1Start(d);
+}
+
+function g1Stop() {
+  g1.sched.clear(); g1.timer.reset(); stopAllAudio();
+  g1.inProgress=false; g1.guessPhase=false; g1.showResult=false;
+  g1ClearAllKeys(); setDurCtrl(1,true);
+}
+
+function g1Start(diff) {
+  g1.inProgress=true; g1.guessPhase=false; g1.showResult=false;
+  g1.guessedNote=null; g1.guessCorrect=false; g1.targetNote=null;
+  setDurCtrl(1,false); g1.timer.reset(); g1ClearAllKeys();
+
+  const pool=[...NOTES].sort(()=>Math.random()-.5).slice(0,diff+3);
+  g1.sequence=pool.sort((a,b)=>NOTE_IDX[a]-NOTE_IDX[b]);
+  g1.selectedKeys=new Set(g1.sequence);
+  g1GraySeqKeys();
+  g1Hint('正在播放序列，請仔細聆聽…');
+
+  const dur=durState[1], step=Math.round(dur*1000)+100;
+  g1.sequence.forEach((note,i) => {
+    g1.sched.add(() => {
+      g1GraySeqKeys(); g1SetKey(note,'orange'); playNote(note,dur);
+      g1.sched.add(()=>g1SetKey(note,'gray'), Math.round(dur*1000));
+    }, i*step);
+  });
+  g1.sched.add(()=>g1StartGuess(), g1.sequence.length*step+300);
+}
+
+function g1StartGuess() {
+  g1.guessPhase=true;
+  g1ClearAllKeys(); g1GraySeqKeys();
+  g1.targetNote=g1.sequence[Math.floor(Math.random()*g1.sequence.length)];
+  g1Hint('請點選你剛才聽到的那個音符 ↓');
+  const dur=durState[1];
+  g1.sched.add(()=>{
+    playNote(g1.targetNote,dur); // 只播音，不顯示視覺提示
+    g1.sched.add(()=>g1.timer.start(), Math.round(dur*1000)+100);
+  }, 200);
+}
+
+function g1KeyClick(note) {
+  if (!g1.guessPhase) { playNote(note,durState[1]); return; }
+  if (g1.showResult) return;
+  g1.guessPhase=false; g1.showResult=true;
+  g1.guessedNote=note; g1.guessCorrect=(note===g1.targetNote);
+  g1.inProgress=false;
+  const elapsed=g1.timer.stop()/1000;
+  setDurCtrl(1,true);
+
+  if (g1.guessCorrect) {
+    g1SetKey(note,'green'); playNote(note,durState[1]);
+    g1Hint('🎉 答對了！');
+    g1.stats[g1.diff].count++;
+    if (g1.stats[g1.diff].best===null || elapsed<g1.stats[g1.diff].best)
+      g1.stats[g1.diff].best=elapsed;
+    saveSt('eargame1_stats',g1.stats); g1UpdateStats();
+    g1Hint('🎉 答對了！請調整播放秒數，再按難度按鈕繼續 ↑');
+    showMsg('🎉 恭喜答對！',`用時：${elapsed.toFixed(2)} 秒\n可以調整播放秒數再按難度按鈕繼續`,
+      [{text:'好的！',primary:true,action:()=>{}}]);
+  } else {
+    g1SetKey(note,'red'); playNote(note,durState[1]);
+    g1Hint(`😅 答錯了，正確答案是 ${g1.targetNote}`);
+    g1.sched.add(()=>{ g1SetKey(g1.targetNote,'green'); playNote(g1.targetNote,durState[1]); },600);
+    showMsg('😅 答錯了',`正確答案是 ${g1.targetNote}`,
+      [{text:'再聽一次',action:g1Replay},{text:'重新開始',primary:true,action:()=>g1Start(g1.diff)}]);
+  }
+}
+
+function g1BkClick(note) { if(!g1.guessPhase) playNote(note,durState[1]); }
+
+function g1Replay() {
+  g1.sched.clear(); stopAllAudio();
+  g1.inProgress=true; g1.guessPhase=false; g1.showResult=false;
+  g1.guessedNote=null; g1.guessCorrect=false;
+  setDurCtrl(1,false); g1.timer.reset(); g1ClearAllKeys(); g1GraySeqKeys();
+  g1Hint('正在播放序列，請仔細聆聽…');
+  const dur=durState[1], step=Math.round(dur*1000)+100;
+  g1.sequence.forEach((note,i)=>{
+    g1.sched.add(()=>{
+      g1GraySeqKeys(); g1SetKey(note,'orange'); playNote(note,dur);
+      g1.sched.add(()=>g1SetKey(note,'gray'),Math.round(dur*1000));
+    },i*step);
+  });
+  g1.sched.add(()=>g1StartGuess(), g1.sequence.length*step+300);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Enter' && document.getElementById('msg-overlay').classList.contains('hidden'))
+    if (g1.diff>=0 && !g1.inProgress) g1Start(g1.diff);
+});
+
+// ── Init ──
+initMode(1);
+initDur(1);
+g1BuildPiano();
+initPasswordGuard(()=>{
+  document.addEventListener('click',()=>{ if(!audioCtx) initAudio(()=>g1UpdateStats()); else resumeCtx(); });
+  initAudio(()=>{
+    document.getElementById('loading-overlay').classList.add('hidden');
+    g1UpdateStats();
+  });
+});
+</script>
+</body>
+</html>

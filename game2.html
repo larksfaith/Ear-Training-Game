@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EarGame 四選一</title>
+  <style>
+    /* ═══ Base ═══ */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:#F0CFBB;
+      font-family:'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif;
+      min-height:100vh;
+    }
+
+    /* ═══ Password overlay ═══ */
+    #pw-overlay {
+      position:fixed; inset:0;
+      background:rgba(240,207,187,0.97);
+      display:flex; align-items:center; justify-content:center; z-index:1000;
+    }
+    #pw-overlay.hidden { display:none; }
+    .pw-box {
+      background:white; border:2px solid #967550; border-radius:14px;
+      padding:40px 44px; max-width:420px; width:92%;
+      text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.18);
+    }
+    .pw-icon  { font-size:48px; margin-bottom:12px; }
+    .pw-title { font-size:20px; font-weight:bold; color:#5a3a1a; margin-bottom:6px; }
+    .pw-sub   { font-size:14px; color:#777; margin-bottom:20px; line-height:1.6; }
+    #pw-input {
+      width:100%; padding:10px 14px; font-size:17px; letter-spacing:2px;
+      font-family:'Courier New',monospace; border:2px solid #C8A47A;
+      border-radius:7px; text-align:center; text-transform:uppercase;
+      outline:none; margin-bottom:8px;
+    }
+    #pw-input:focus { border-color:#A07050; }
+    #pw-err { color:#C0392B; font-size:13px; margin-bottom:10px; min-height:18px; }
+    #pw-err.hidden { visibility:hidden; }
+    #pw-submit {
+      width:100%; padding:11px; background:#A07050; color:white;
+      border:none; border-radius:7px; font-size:15px; font-family:inherit;
+      cursor:pointer; margin-bottom:14px;
+    }
+    #pw-submit:hover { background:#8a6040; }
+    .pw-contact { font-size:13px; color:#888; }
+    .pw-contact a { color:#7B4FCF; text-decoration:none; }
+    .pw-contact a:hover { text-decoration:underline; }
+
+    /* ═══ Loading ═══ */
+    #loading-overlay {
+      position:fixed; inset:0; background:rgba(240,207,187,.93);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:14px; font-size:17px; color:#555; z-index:500;
+    }
+    #loading-overlay.hidden { display:none; }
+    .spinner {
+      width:36px; height:36px;
+      border:4px solid #cba890; border-top-color:#A07050;
+      border-radius:50%; animation:spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ═══ App ═══ */
+    #app { width:940px; margin:0 auto; background:#F0CFBB; padding:12px; }
+
+    /* top bar */
+    #top-bar { display:flex; align-items:flex-start; gap:12px; min-height:110px; margin-bottom:6px; }
+    .timer-panel { min-width:155px; padding-top:8px; }
+    #g2-timer {
+      font-size:52px; font-weight:bold; color:#CC0000;
+      font-family:'Courier New',monospace; letter-spacing:2px;
+    }
+    .diff-panel { flex:1; display:flex; flex-direction:column; gap:4px; padding-top:8px; }
+    .diff-row   { display:flex; align-items:center; gap:10px; height:28px; }
+    .diff-btn {
+      width:80px; height:28px; font-size:14px; font-weight:bold;
+      font-family:inherit; border:1.5px solid #967550; border-radius:4px;
+      background:white; color:#333; cursor:pointer; flex-shrink:0;
+      transition:background .1s, color .1s;
+    }
+    .diff-btn:hover:not(:disabled) { background:#f5e8dc; }
+    .diff-btn.selected { background:#A07050; color:white; }
+    .diff-btn:disabled { opacity:.45; cursor:not-allowed; }
+    .diff-stats { font-size:12px; color:#666; white-space:nowrap; }
+
+    /* right column: controls + notice */
+    .ctrl-panel { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+    .dur-row    { display:flex; align-items:center; gap:6px; font-size:13px; color:#444; }
+    .pm-btn {
+      width:28px; height:28px; font-size:16px; line-height:1;
+      border:1.5px solid #967550; border-radius:4px;
+      background:white; cursor:pointer; font-family:inherit;
+    }
+    .pm-btn:hover:not(:disabled) { background:#f5e8dc; }
+    .pm-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .dur-val  { min-width:50px; text-align:center; font-weight:bold; }
+    .mode-btn {
+      padding:5px 14px; font-size:13px; font-family:inherit;
+      border:1.5px solid #967550; border-radius:4px;
+      background:white; cursor:pointer; color:#333;
+    }
+    .mode-btn:hover { background:#f5e8dc; }
+
+    /* 警語 */
+    .notice-text {
+      text-align:right; font-size:12px; color:#888;
+      line-height:1.8; margin-top:4px;
+    }
+    .notice-text a { color:#7B4FCF; text-decoration:none; font-style:italic; }
+    .notice-text a:hover { text-decoration:underline; }
+
+    /* ═══ 4 mini keyboards ═══ */
+    #g2-keyboards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .kb-wrap {
+      border:3px solid transparent; border-radius:6px;
+      padding:5px 6px; cursor:pointer; user-select:none;
+      transition:border-color .1s;
+    }
+    .kb-wrap:hover { background:rgba(0,0,0,.03); }
+    .kb-wrap.sel-border  { border-color:#DD1111; }
+    .kb-wrap.dis-option  { opacity:.25; cursor:not-allowed; pointer-events:none; }
+    .kb-label { font-size:17px; font-weight:bold; text-align:center; margin-bottom:3px; color:#333; }
+    .mini-piano {
+      position:relative; width:420px; height:124px;
+      background:#2a2a2a; border:1px solid #555; border-radius:0 0 5px 5px;
+    }
+    .mwk {
+      position:absolute; top:1px; width:58px; height:120px;
+      background:white; border:1px solid #888; border-radius:0 0 5px 5px; z-index:1;
+      display:flex; align-items:flex-end; justify-content:center;
+      padding-bottom:7px; transition:background .08s; user-select:none;
+    }
+    .mwk.gray-key   { background:#C0C0C0; }
+    .mwk.orange-key { background:#FFA030; }
+    .mwk.blue-key   { background:#7BAAD8; }
+    .mwk-label { font-size:11px; color:#555; font-weight:500; pointer-events:none; user-select:none; }
+    .mbk {
+      position:absolute; top:1px; width:36px; height:74px;
+      background:#222; border-radius:0 0 4px 4px; z-index:2; transition:background .08s;
+    }
+    .mbk.gray-key   { background:#787878; }
+    .mbk.orange-key { background:#CC7000; }
+    .mbk.blue-key   { background:#4A7AAF; }
+
+    /* ═══ Message dialog ═══ */
+    #msg-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:flex; align-items:center; justify-content:center; z-index:300;
+    }
+    #msg-overlay.hidden { display:none; }
+    #msg-box {
+      background:#F5D8C4; border:2px solid #967550; border-radius:10px;
+      padding:28px 36px; min-width:300px; text-align:center;
+      box-shadow:0 8px 32px rgba(0,0,0,.25);
+    }
+    #msg-title { font-size:22px; font-weight:bold; margin-bottom:10px; color:#333; }
+    #msg-text  { font-size:15px; margin-bottom:22px; color:#555; }
+    .msg-btn {
+      padding:8px 22px; margin:4px; font-size:14px; font-family:inherit;
+      border:1.5px solid #967550; border-radius:5px;
+      background:white; cursor:pointer; color:#333;
+    }
+    .msg-btn:hover { background:#f5e8dc; }
+    .msg-btn.primary { background:#A07050; color:white; border-color:#7a5030; }
+    .msg-btn.primary:hover { background:#8a6040; }
+  </style>
+</head>
+<body>
+
+<!-- ── 密碼防護畫面 ────────────────────────────────── -->
+<div id="pw-overlay">
+  <div class="pw-box">
+    <div class="pw-icon">🔑</div>
+    <div class="pw-title">需要老師的密碼</div>
+    <div class="pw-sub">
+      超過 <strong>48 小時</strong> 未練習<br>
+      請每天練習，跟老師索取今日密碼 🎵
+    </div>
+    <input id="pw-input" type="text" placeholder="LARK-XXXX-XXXX"
+           autocomplete="off" spellcheck="false" maxlength="14">
+    <div id="pw-err" class="hidden">❌ 密碼錯誤，請確認後再試</div>
+    <button id="pw-submit">確認密碼</button>
+    <div class="pw-contact">
+      聯繫老師：
+      <a href="https://www.instagram.com/larksfaith" target="_blank" rel="noopener">@larksfaith</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── 載入音色 ───────────────────────────────────── -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div>載入鋼琴音色中，請稍候…</div>
+</div>
+
+<!-- ── 遊戲主體 ───────────────────────────────────── -->
+<div id="app">
+  <div id="top-bar">
+    <!-- 計時器 -->
+    <div class="timer-panel">
+      <div id="g2-timer">00.00</div>
+    </div>
+
+    <!-- 難度選擇 -->
+    <div class="diff-panel">
+      <div class="diff-row">
+        <button class="diff-btn" id="g2-btn-0" onclick="g2SetDiff(0)">初階</button>
+        <span class="diff-stats" id="g2-stats-0"></span>
+      </div>
+      <div class="diff-row">
+        <button class="diff-btn" id="g2-btn-1" onclick="g2SetDiff(1)">進階</button>
+        <span class="diff-stats" id="g2-stats-1"></span>
+      </div>
+      <div class="diff-row">
+        <button class="diff-btn" id="g2-btn-2" onclick="g2SetDiff(2)">困難</button>
+        <span class="diff-stats" id="g2-stats-2"></span>
+      </div>
+    </div>
+
+    <!-- 右側：播放控制 + 警語 -->
+    <div class="ctrl-panel">
+      <div class="dur-row">
+        <span>播放秒數</span>
+        <button class="pm-btn" id="g2-dur-m" onclick="adjDur(2,-1,()=>g2.inProgress)">－</button>
+        <span class="dur-val" id="g2-dur-val">0.5秒</span>
+        <button class="pm-btn" id="g2-dur-p" onclick="adjDur(2,1,()=>g2.inProgress)">＋</button>
+      </div>
+      <button class="mode-btn" id="g2-mode-btn" onclick="cycleMode(2,g2UpdateLabels)">DoReMi</button>
+      <!-- 警語：與原版相同位置，右對齊小字 -->
+      <div class="notice-text">
+        此程式為 Lark 超好玩歌唱班 專屬所有<br>
+        請勿轉傳或分享給他人，我們要當個誠實的人<br>
+        設計者：Lark李念 <a href="https://www.instagram.com/larksfaith" target="_blank" rel="noopener">@larksfaith</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="g2-keyboards"></div>
+</div>
+
+<!-- ── 彈出訊息框 ─────────────────────────────────── -->
+<div id="msg-overlay" class="hidden">
+  <div id="msg-box">
+    <div id="msg-title"></div>
+    <div id="msg-text"></div>
+    <div id="msg-btns"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.js"></script>
+<script src="shared.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  Game 2  –  四選一
+// ═══════════════════════════════════════════════════════════════
+const G2_OPTS    = ['A','B','C','D'];
+const G2_WK_LEFT = [0,60,120,180,240,300,360];
+const G2_BK_LEFT = {'C#3':42,'D#3':102,'F#3':222,'G#3':282,'A#3':342};
+
+const g2 = {
+  diff:-1, inProgress:false, canAnswer:false,
+  sequence:[], choiceLast:[null,null,null,null],
+  correct:-1, numChoice:0,
+  timer: mkTimer('g2-timer'),
+  sched: mkSched([]),
+  stats: loadSt('eargame2_stats')
+};
+
+function g2kId(lt,note){ return 'g2k-'+lt+'-'+note.replace('#','s'); }
+
+function g2BuildKeyboards() {
+  const grid = document.getElementById('g2-keyboards');
+  grid.innerHTML='';
+  for(let oi=0;oi<4;oi++){
+    const lt=G2_OPTS[oi];
+    const wrap=document.createElement('div');
+    wrap.className='kb-wrap'; wrap.id='g2kb-'+lt;
+    wrap.addEventListener('click',()=>g2SelectAnswer(oi));
+    const lbl=document.createElement('div');
+    lbl.className='kb-label'; lbl.textContent='('+lt+')';
+    const piano=document.createElement('div');
+    piano.className='mini-piano'; piano.id='g2piano-'+lt;
+    NOTES.forEach((note,i)=>{
+      const k=document.createElement('div');
+      k.className='mwk'; k.id=g2kId(lt,note);
+      k.style.left=G2_WK_LEFT[i]+'px';
+      const lbl2=document.createElement('span');
+      lbl2.className='mwk-label';
+      lbl2.textContent=NOTE_LBLS[dispMode[2]][i];
+      k.appendChild(lbl2); piano.appendChild(k);
+    });
+    BK_NOTES.forEach(note=>{
+      const k=document.createElement('div');
+      k.className='mbk'; k.id=g2kId(lt,note);
+      k.style.left=G2_BK_LEFT[note]+'px'; piano.appendChild(k);
+    });
+    wrap.appendChild(lbl); wrap.appendChild(piano); grid.appendChild(wrap);
+  }
+}
+
+function g2UpdateLabels(){
+  G2_OPTS.forEach(lt=>{
+    NOTES.forEach((note,i)=>{
+      const el=document.getElementById(g2kId(lt,note));
+      if(el) el.querySelector('.mwk-label').textContent=NOTE_LBLS[dispMode[2]][i];
+    });
+  });
+}
+
+function g2SetKey(lt,note,state){
+  const el=document.getElementById(g2kId(lt,note));
+  if(!el) return;
+  el.classList.remove('gray-key','orange-key','blue-key');
+  if(state) el.classList.add(state+'-key');
+}
+function g2ClearAll(){
+  G2_OPTS.forEach(lt=>{ NOTES.forEach(n=>g2SetKey(lt,n,null)); BK_NOTES.forEach(n=>g2SetKey(lt,n,null)); });
+}
+function g2GraySeq(){ G2_OPTS.forEach(lt=>g2.sequence.forEach(n=>g2SetKey(lt,n,'gray'))); }
+function g2SetBorder(lt,on){ document.getElementById('g2kb-'+lt).classList.toggle('sel-border',on); }
+function g2ClearBorders(){ G2_OPTS.forEach(lt=>g2SetBorder(lt,false)); }
+
+function g2UpdateStats(){
+  for(let i=0;i<3;i++){
+    const s=g2.stats[i];
+    document.getElementById('g2-stats-'+i).textContent = s.count>0
+      ? `目前挑戰成功${s.count}次  最速紀錄${s.best.toFixed(2)}秒` : '';
+  }
+}
+function g2RefreshDiffBtns(){ for(let i=0;i<3;i++) document.getElementById('g2-btn-'+i).classList.toggle('selected',i===g2.diff); }
+
+function g2SetDiff(d){
+  if(!audioReady) return;
+  if(g2.inProgress||g2.canAnswer) g2Stop();
+  g2.diff=d; g2RefreshDiffBtns(); g2NewGame(d);
+}
+
+function g2Stop(){
+  g2.sched.clear(); g2.timer.reset(); stopAllAudio();
+  g2.inProgress=false; g2.canAnswer=false;
+  g2ClearAll(); g2ClearBorders(); setDurCtrl(2,true);
+}
+
+function g2NewGame(diff){
+  g2.inProgress=true; g2.canAnswer=false;
+  setDurCtrl(2,false); g2.timer.reset(); g2ClearAll(); g2ClearBorders();
+  const pool=[...NOTES].sort(()=>Math.random()-.5).slice(0,diff+3);
+  g2.sequence=pool.sort((a,b)=>NOTE_IDX[a]-NOTE_IDX[b]);
+  g2.numChoice=Math.min(diff+3,4);
+  g2.choiceLast=[null,null,null,null];
+  for(let i=0;i<g2.numChoice;i++) g2.choiceLast[i]=g2.sequence[i];
+  g2.correct=Math.floor(Math.random()*g2.numChoice);
+  for(let i=0;i<4;i++)
+    document.getElementById('g2kb-'+G2_OPTS[i]).classList.toggle('dis-option',i>=g2.numChoice);
+  g2DemoPhase();
+}
+
+function g2DemoPhase(){
+  g2GraySeq();
+  const dur=durState[2], step=Math.round(dur*1000)+100;
+  const playT=(g2.sequence.length+1)*step+500, gap=1000;
+  for(let i=0;i<g2.numChoice;i++){
+    const lt=G2_OPTS[i], notes=[...g2.sequence,g2.choiceLast[i]];
+    g2.sched.add(()=>g2PlayDemoOpt(lt,notes,step,dur), i*(playT+gap));
+  }
+  g2.sched.add(()=>g2TestPhase(step,dur), g2.numChoice*(playT+gap));
+}
+
+function g2PlayDemoOpt(lt,notes,step,dur){
+  g2.sequence.forEach(n=>g2SetKey(lt,n,'gray'));
+  notes.forEach((note,i)=>{
+    const isLast=(i===notes.length-1);
+    g2.sched.add(()=>{
+      g2.sequence.forEach(gn=>g2SetKey(lt,gn,'gray'));
+      g2SetKey(lt,note,'orange'); playNote(note,dur);
+      if(!isLast) g2.sched.add(()=>g2SetKey(lt,note,g2.sequence.includes(note)?'gray':null),Math.round(dur*1000));
+    },i*step);
+  });
+}
+
+function g2TestPhase(step,dur){
+  g2ClearAll();
+  const test=[...g2.sequence,g2.choiceLast[g2.correct]];
+  test.forEach((note,i)=>g2.sched.add(()=>playNote(note,dur),i*step));
+  g2.sched.add(()=>{ g2.canAnswer=true; g2.timer.start(); }, test.length*step+500);
+}
+
+function g2SelectAnswer(optIdx){
+  if(!g2.canAnswer||optIdx>=g2.numChoice) return;
+  g2.canAnswer=false; g2.inProgress=false;
+  const elapsed=g2.timer.stop()/1000;
+  setDurCtrl(2,true);
+  g2SetBorder(G2_OPTS[optIdx],true);
+  g2SetKey(G2_OPTS[optIdx],g2.choiceLast[optIdx],'blue');
+  if(optIdx===g2.correct){
+    g2.stats[g2.diff].count++;
+    if(g2.stats[g2.diff].best===null||elapsed<g2.stats[g2.diff].best) g2.stats[g2.diff].best=elapsed;
+    saveSt('eargame2_stats',g2.stats); g2UpdateStats();
+    showMsg('🎉 恭喜答對！',`用時：${elapsed.toFixed(2)} 秒\n可以調整播放秒數再按難度按鈕繼續`,
+      [{text:'好的！',primary:true,action:()=>{}}]);
+  } else {
+    showMsg('😅 答錯了',`正確答案是選項 (${G2_OPTS[g2.correct]})`,
+      [{text:'再聽一次',action:g2Replay},{text:'重新開始',primary:true,action:()=>g2NewGame(g2.diff)}]);
+  }
+}
+
+function g2Replay(){
+  g2.sched.clear(); stopAllAudio();
+  g2.inProgress=true; g2.canAnswer=false;
+  setDurCtrl(2,false); g2.timer.reset(); g2ClearAll(); g2ClearBorders();
+  g2DemoPhase();
+}
+
+// ── Init ──
+initMode(2);
+initDur(2);
+g2BuildKeyboards();
+initPasswordGuard(()=>{
+  document.addEventListener('click',()=>{ if(!audioCtx) initAudio(()=>g2UpdateStats()); else resumeCtx(); });
+  initAudio(()=>{
+    document.getElementById('loading-overlay').classList.add('hidden');
+    g2UpdateStats();
+  });
+});
+</script>
+</body>
+</html>
