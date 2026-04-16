@@ -430,8 +430,13 @@ function g2SelectAnswer(optIdx){
 }
 
 function g2Replay(){
+  // 再聽一次：明確保留原本的正確答案與選項，不重新隨機
+  const savedCorrect    = g2.correct;
+  const savedChoiceLast = [...g2.choiceLast];
   g2.sched.clear(); stopAllAudio();
   g2.inProgress=true; g2.canAnswer=false;
+  g2.correct    = savedCorrect;
+  g2.choiceLast = savedChoiceLast;
   setDurCtrl(2,false); g2.timer.reset(); g2ClearAll(); g2ClearBorders();
   g2DemoPhase();
 }
