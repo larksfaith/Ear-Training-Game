@@ -414,9 +414,9 @@ function g1KeyClick(note) {
       [{text:'好的！',primary:true,action:()=>{}}]);
   } else {
     g1SetKey(note,'red'); playNote(note,durState[1]);
-    g1Hint(`😅 答錯了，正確答案是 ${g1.targetNote}`);
+    g1Hint(`😅 答錯了，正確答案是 ${noteDispLabel(g1.targetNote,1)}`);
     g1.sched.add(()=>{ g1SetKey(g1.targetNote,'green'); playNote(g1.targetNote,durState[1]); },600);
-    showMsg('😅 答錯了',`正確答案是 ${g1.targetNote}`,
+    showMsg('😅 答錯了',`正確答案是 ${noteDispLabel(g1.targetNote,1)}`,
       [{text:'再聽一次',action:g1Replay},{text:'重新開始',primary:true,action:()=>g1Start(g1.diff)}]);
   }
 }
