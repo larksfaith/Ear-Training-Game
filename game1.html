@@ -436,7 +436,16 @@ function g1Replay() {
       g1.sched.add(()=>g1SetKey(note,'gray'),Math.round(dur*1000));
     },i*step);
   });
-  g1.sched.add(()=>g1StartGuess(), g1.sequence.length*step+300);
+  // 再聽一次：沿用同一個 targetNote，不重新隨機選
+  g1.sched.add(()=>{
+    g1.guessPhase=true;
+    g1ClearAllKeys(); g1GraySeqKeys();
+    g1Hint('請點選你剛才聽到的那個音符 ↓');
+    g1.sched.add(()=>{
+      playNote(g1.targetNote, dur);
+      g1.sched.add(()=>g1.timer.start(), Math.round(dur*1000)+100);
+    }, 200);
+  }, g1.sequence.length*step+300);
 }
 
 document.addEventListener('keydown', e => {
