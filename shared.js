@@ -218,6 +218,13 @@ function setDurCtrl(game, on) {
 // 顯示模式
 const dispMode = {};
 function initMode(game) { dispMode[game] = 1; } // DoReMi 為預設
+
+/** 依目前顯示模式把 note（如 "E3"）轉成標籤（如 "Mi"）；空白模式時 fallback 到 CDEFGAB */
+function noteDispLabel(note, game) {
+  const idx = NOTE_IDX[note];
+  const lbl = NOTE_LBLS[dispMode[game]][idx];
+  return lbl || NOTE_LBLS[0][idx];
+}
 function cycleMode(game, updateFn) {
   dispMode[game] = (dispMode[game] + 1) % 4;
   document.getElementById('g'+game+'-mode-btn').textContent = DISP_MODES[dispMode[game]];
