@@ -424,7 +424,7 @@ function g2SelectAnswer(optIdx){
     showMsg('🎉 恭喜答對！',`用時：${elapsed.toFixed(2)} 秒\n可以調整播放秒數再按難度按鈕繼續`,
       [{text:'好的！',primary:true,action:()=>{}}]);
   } else {
-    showMsg('😅 答錯了',`正確答案是選項 (${G2_OPTS[g2.correct]})`,
+    showMsg('😅 答錯了',`正確答案是選項 (${G2_OPTS[g2.correct]})，結尾音：${noteDispLabel(g2.choiceLast[g2.correct],2)}`,
       [{text:'再聽一次',action:g2Replay},{text:'重新開始',primary:true,action:()=>g2NewGame(g2.diff)}]);
   }
 }
